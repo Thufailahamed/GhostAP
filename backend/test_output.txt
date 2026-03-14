@@ -1,0 +1,13 @@
+{
+  "vendor_name": "Unknown Vendor",
+  "invoice_number": "",
+  "date": "",
+  "due_date": "",
+  "subtotal": 0.0,
+  "discount": 0.0,
+  "tax": 0.0,
+  "shipping": 0.0,
+  "total": 0.0,
+  "line_items": [],
+  "confidence_score": 10.0
+}

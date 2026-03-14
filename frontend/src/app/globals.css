@@ -1,0 +1,374 @@
+@import "tailwindcss";
+
+@theme {
+  --color-terminal-bg: var(--color-bg);
+  --color-terminal-panel: var(--color-panel);
+  --color-terminal-green: var(--color-primary);
+  --color-terminal-green-dark: var(--color-primary-dark);
+  --color-terminal-amber: var(--color-warning);
+  --color-terminal-cyan: var(--color-info);
+  --color-terminal-red: var(--color-error);
+
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+
+  --font-sans:
+    "Inter", "Roboto", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  /* Google Cloud Platform Light Theme */
+  --color-bg: #ffffff;
+  --color-panel: #f8f9fa;
+  --color-panel-muted: #f1f3f4;
+  --color-primary: #1a73e8;
+  --color-primary-dark: #1558b0;
+  --color-warning: #f9ab00;
+  --color-info: #0088cc;
+  --color-error: #d93025;
+  --color-text: #202124;
+  --color-border: #dadce0;
+  --color-hover: rgba(26, 115, 232, 0.08); /* Faint blue hover */
+
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  color-scheme: light;
+}
+
+.dark {
+  /* Dark Terminal Theme (Original) */
+  --color-bg: #000000;
+  --color-panel: #050505;
+  --color-panel-muted: #111111;
+  --color-primary: #00ff88;
+  --color-primary-dark: #008f5a;
+  --color-warning: #ffb000;
+  --color-info: #00ffff;
+  --color-error: #ff003c;
+  --color-text: #00ff00;
+  --color-border: #00ff88;
+  --color-hover: rgba(0, 255, 0, 0.1);
+
+  --background: var(--color-bg);
+  --foreground: var(--color-text);
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  /* The layout uses generic sans by default, but we'll enforce fonts per component where needed */
+}
+
+/* Enforce strictly boxy, sharp design */
+* {
+  border-radius: 0 !important;
+}
+
+/* ─── Global Terminal Overrides ─────────────────────────────────── */
+/* Catch-all: remap remaining Tailwind light-mode utility classes   */
+/* to terminal theme colors so ALL pages look correct.             */
+
+/* Background overrides */
+.bg-white {
+  background-color: var(--color-panel) !important;
+}
+.bg-black {
+  background-color: var(--color-bg) !important;
+}
+.bg-\[\#111\] {
+  background-color: var(--color-panel-muted) !important;
+}
+.bg-gray-50,
+.bg-gray-100,
+.bg-gray-800,
+.bg-gray-900,
+.bg-\[#fafafa\] {
+  background-color: transparent !important;
+}
+
+/* Text overrides */
+.text-black {
+  color: var(--color-bg) !important;
+}
+.text-white {
+  color: var(--color-text) !important;
+}
+.text-gray-300,
+.text-gray-400,
+.text-gray-500,
+.text-gray-700,
+.text-gray-800,
+.text-gray-900 {
+  color: var(--color-text) !important;
+}
+
+.text-gray-600 {
+  color: var(--color-warning) !important;
+}
+
+/* Border overrides */
+.border-black {
+  border-color: var(--color-border) !important;
+}
+.border-gray-100,
+.border-gray-200,
+.border-gray-300 {
+  border-color: var(--color-border) !important;
+}
+.border-\[\#333\] {
+  border-color: var(--color-border) !important;
+}
+
+/* Text color overrides for semantic classes */
+.text-blue-600,
+.text-blue-700 {
+  color: var(--color-terminal-cyan) !important;
+}
+.text-green-600,
+.text-green-700,
+.text-green-800 {
+  color: var(--color-terminal-green) !important;
+}
+.text-red-600,
+.text-red-700,
+.text-red-800 {
+  color: var(--color-terminal-red) !important;
+}
+.text-yellow-600,
+.text-yellow-700,
+.text-yellow-800 {
+  color: var(--color-terminal-amber) !important;
+}
+
+/* Background color overrides for semantic classes */
+.bg-green-100,
+.bg-green-50 {
+  background-color: rgba(0, 255, 0, 0.05) !important;
+}
+.bg-red-100,
+.bg-red-50 {
+  background-color: rgba(255, 0, 60, 0.05) !important;
+}
+.bg-yellow-100,
+.bg-yellow-50 {
+  background-color: rgba(255, 176, 0, 0.05) !important;
+}
+.bg-blue-100,
+.bg-blue-50 {
+  background-color: rgba(0, 255, 255, 0.05) !important;
+}
+
+/* Border color overrides for semantic classes */
+.border-green-600,
+.border-green-800 {
+  border-color: var(--color-terminal-green) !important;
+}
+.border-red-600,
+.border-red-800 {
+  border-color: var(--color-terminal-red) !important;
+}
+.border-yellow-500,
+.border-yellow-800 {
+  border-color: var(--color-terminal-amber) !important;
+}
+.border-blue-600,
+.border-blue-800 {
+  border-color: var(--color-terminal-cyan) !important;
+}
+
+/* Shadow overrides — remove all box-shadows for clean terminal look */
+[class*="shadow-"] {
+  box-shadow: none !important;
+}
+
+/* Hover overrides */
+.hover\:bg-gray-100:hover,
+.hover\:bg-gray-50:hover,
+.hover\:bg-gray-200:hover,
+.hover\:bg-gray-800:hover {
+  background-color: var(--color-hover) !important;
+}
+.hover\:bg-blue-50:hover {
+  background-color: var(--color-hover) !important;
+}
+.hover\:bg-\[\#111\]:hover {
+  background-color: var(--color-hover) !important;
+}
+.hover\:text-black:hover {
+  color: var(--color-bg) !important;
+}
+.hover\:text-white:hover {
+  color: var(--color-text) !important;
+}
+
+/* Select / date input color scheme */
+select,
+input[type="date"] {
+  color-scheme: inherit;
+}
+
+/* ─── TERMINAL ENHANCEMENT EFFECTS ──────────────────────────────── */
+
+/* 1. CRT Scanline overlay — subtle horizontal line effect */
+.dark body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* 2. Neon text glow on headings and important elements */
+.dark h1,
+.dark h2,
+.dark h3 {
+  text-shadow:
+    0 0 8px rgba(0, 255, 0, 0.4),
+    0 0 20px rgba(0, 255, 0, 0.15);
+}
+
+.dark .text-terminal-amber {
+  text-shadow:
+    0 0 8px rgba(255, 176, 0, 0.4),
+    0 0 20px rgba(255, 176, 0, 0.15);
+}
+
+.dark .text-terminal-cyan {
+  text-shadow:
+    0 0 8px rgba(0, 255, 255, 0.4),
+    0 0 20px rgba(0, 255, 255, 0.15);
+}
+
+.dark .text-terminal-red {
+  text-shadow:
+    0 0 8px rgba(255, 0, 60, 0.4),
+    0 0 20px rgba(255, 0, 60, 0.15);
+}
+
+/* 3. Blinking block cursor — use class .terminal-cursor on any element */
+.dark .terminal-cursor::after {
+  content: "█";
+  animation: blink-cursor 1s step-end infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink-cursor {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* 4. Page boot-up flicker animation */
+@keyframes terminal-boot {
+  0% {
+    opacity: 0;
+    filter: brightness(2);
+  }
+  10% {
+    opacity: 0.6;
+    filter: brightness(1.5);
+  }
+  20% {
+    opacity: 0.2;
+    filter: brightness(0.5);
+  }
+  30% {
+    opacity: 0.8;
+    filter: brightness(1.2);
+  }
+  50% {
+    opacity: 0.4;
+    filter: brightness(0.8);
+  }
+  70% {
+    opacity: 0.9;
+    filter: brightness(1.1);
+  }
+  100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+.dark main,
+.dark [class*="flex-1"] {
+  animation: terminal-boot 0.6s ease-out;
+}
+
+/* 5. Subtle screen vignette effect */
+.dark body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 60%,
+    rgba(0, 0, 0, 0.5) 100%
+  );
+  pointer-events: none;
+  z-index: 9998;
+}
+
+/* 6. Custom scrollbar styling (Hidden) */
+::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: none;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: transparent;
+}
+
+/* Firefox scrollbar (Hidden) */
+* {
+  scrollbar-width: none;
+}
+
+/* 7. Glow effect on borders for focused/active elements */
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  box-shadow:
+    0 0 6px rgba(0, 255, 0, 0.3),
+    inset 0 0 6px rgba(0, 255, 0, 0.1) !important;
+}
+
+/* 8. Table row hover glow */
+.dark tr:hover {
+  box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.03);
+}
+
+/* 9. Button press effect */
+button:active {
+  filter: brightness(1.3);
+}

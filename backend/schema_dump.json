@@ -1,0 +1,120 @@
+{
+  "vendors": [
+    "id",
+    "name",
+    "tax_id",
+    "default_currency",
+    "default_category",
+    "notes",
+    "is_flagged"
+  ],
+  "invoices": [
+    "id",
+    "invoice_number",
+    "vendor_id",
+    "issue_date",
+    "due_date",
+    "subtotal",
+    "tax_amount",
+    "shipping_amount",
+    "total_amount",
+    "currency",
+    "status",
+    "ai_confidence_score",
+    "pdf_path",
+    "source",
+    "source_email_from",
+    "source_email_subject",
+    "created_at",
+    "discount_amount",
+    "source_email_id",
+    "paid_amount",
+    "approval_comment"
+  ],
+  "line_items": [
+    "id",
+    "invoice_id",
+    "description",
+    "quantity",
+    "unit_price",
+    "total_price",
+    "category_id"
+  ],
+  "categories": [
+    "id",
+    "code",
+    "name",
+    "type",
+    "description"
+  ],
+  "customers": [
+    "id",
+    "name",
+    "payment_terms"
+  ],
+  "receivables": [
+    "id",
+    "invoice_number",
+    "customer_id",
+    "issue_date",
+    "due_date",
+    "total_amount",
+    "paid_amount",
+    "status",
+    "created_at"
+  ],
+  "payments_received": [
+    "id",
+    "receivable_id",
+    "amount",
+    "date",
+    "method",
+    "reference"
+  ],
+  "journal_entries": [
+    "id",
+    "date",
+    "description",
+    "reference"
+  ],
+  "bank_accounts": [
+    "id",
+    "name",
+    "account_number",
+    "bank_name",
+    "currency"
+  ],
+  "journal_lines": [
+    "id",
+    "journal_id",
+    "account_id",
+    "debit",
+    "credit"
+  ],
+  "bank_transactions": [
+    "id",
+    "bank_account_id",
+    "journal_id",
+    "date",
+    "amount",
+    "type",
+    "reference",
+    "reconciled"
+  ],
+  "products": [
+    "id",
+    "name",
+    "sku",
+    "unit_price",
+    "income_account_id"
+  ],
+  "estimates": [
+    "id",
+    "estimate_number",
+    "customer_id",
+    "issue_date",
+    "valid_until",
+    "total_amount",
+    "status"
+  ]
+}
