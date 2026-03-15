@@ -171,6 +171,9 @@ class Receivable(Base):
     currency = Column(String, default="USD")
     exchange_rate = Column(Float, default=1.0)
     
+    # Path to the raw PDF/Document
+    pdf_path = Column(String, nullable=True)
+    
     status = Column(Enum(ReceivableStatus), default=ReceivableStatus.DRAFT)
     
     created_at = Column(UTCDateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))

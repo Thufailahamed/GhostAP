@@ -128,15 +128,21 @@ export default function DashboardPage() {
 
       {/* Quick Actions Command Center */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pb-2 border-b border-terminal-green/30">
-        <Button variant="outline" className="bg-terminal-panel text-terminal-green border-terminal-green hover:bg-terminal-green hover:text-black flex gap-2 h-12">
-           <Zap size={16} /> <span className="tracking-widest text-xs font-bold">SCAN_DOCUMENT</span>
-        </Button>
-        <Button variant="outline" className="bg-terminal-panel text-terminal-cyan border-terminal-cyan hover:bg-terminal-cyan hover:text-black flex gap-2 h-12">
-           <Send size={16} /> <span className="tracking-widest text-xs font-bold">RUN_PAYMENT_BATCH</span>
-        </Button>
-        <Button variant="outline" className="bg-terminal-panel text-terminal-amber border-terminal-amber hover:bg-terminal-amber hover:text-black flex gap-2 h-12">
-           <RefreshCw size={16} /> <span className="tracking-widest text-xs font-bold">SYNC_LEDGER</span>
-        </Button>
+        <Link href="/dashboard/upload" className="w-full">
+          <Button variant="outline" className="w-full bg-terminal-panel text-terminal-green border-terminal-green hover:bg-terminal-green hover:text-black flex gap-2 h-12">
+             <Zap size={16} /> <span className="tracking-widest text-xs font-bold">SCAN_DOCUMENT</span>
+          </Button>
+        </Link>
+        <Link href="/dashboard/receivables" className="w-full">
+          <Button variant="outline" className="w-full bg-terminal-panel text-terminal-cyan border-terminal-cyan hover:bg-terminal-cyan hover:text-black flex gap-2 h-12">
+             <Send size={16} /> <span className="tracking-widest text-xs font-bold">RUN_PAYMENT_BATCH</span>
+          </Button>
+        </Link>
+        <Link href="/dashboard/ledger" className="w-full">
+          <Button variant="outline" className="w-full bg-terminal-panel text-terminal-amber border-terminal-amber hover:bg-terminal-amber hover:text-black flex gap-2 h-12">
+             <RefreshCw size={16} /> <span className="tracking-widest text-xs font-bold">SYNC_LEDGER</span>
+          </Button>
+        </Link>
         <Button onClick={exportToPDF} variant="outline" className="bg-terminal-panel text-terminal-green border-terminal-green/50 hover:bg-terminal-green hover:text-black flex gap-2 h-12">
            <Download size={16} /> <span className="tracking-widest text-xs font-bold">GENERATE_REPORT</span>
         </Button>
@@ -506,13 +512,15 @@ export default function DashboardPage() {
           <Card className="rounded-none border-2 border-terminal-green bg-terminal-panel text-terminal-green h-full">
             <CardHeader className="flex flex-row justify-between items-center border-b-2 border-terminal-green">
               <CardTitle>Priority Action Queue</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-terminal-panel text-terminal-green border-terminal-green hover:bg-terminal-green hover:text-black"
-              >
-                VIEW ALL
-              </Button>
+              <Link href="/dashboard/invoices">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-terminal-panel text-terminal-green border-terminal-green hover:bg-terminal-green hover:text-black"
+                >
+                  VIEW ALL
+                </Button>
+              </Link>
             </CardHeader>
             <CardContent className="p-0 mt-0">
           <div className="overflow-x-auto">

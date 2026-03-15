@@ -592,3 +592,49 @@ async def delete_invoice(invoice_id: str, db: Session = Depends(get_db), current
     db.commit()
     
     return {"message": f"Invoice {inv.invoice_number or invoice_id} deleted successfully"}
+
+
+@router.post("/{id}/convert-to-receivable")
+def convert_to_receivable(id: int, customer_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    user_id = current_user["sub"]
+    invoice = db.query(models.Invoice).filter(models.Invoice.id == id, models.Invoice.user_id == user_id).first()
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+        
+    customer = db.query(models.Customer).filter(models.Customer.id == customer_id, models.Customer.user_id == user_id).first()
+    if not customer:
+        raise HTTPException(status_code=400, detail="Customer not found")
+
+    # Create Receivable
+    db_receivable = models.Receivable(
+        user_id=user_id,
+        invoice_number=invoice.invoice_number,
+        customer_id=customer_id,
+        issue_date=invoice.issue_date,
+        due_date=invoice.due_date,
+        total_amount=invoice.total_amount,
+        amount_base=invoice.amount_base,
+        currency=invoice.currency,
+        exchange_rate=invoice.exchange_rate,
+        pdf_path=invoice.pdf_path,
+        status=models.ReceivableStatus.SENT
+    )
+    db.add(db_receivable)
+    db.flush()
+
+    # Move items
+    for item in invoice.line_items:
+        db_item = models.ReceivableLineItem(
+            receivable_id=db_receivable.id,
+            description=item.description,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            total_price=item.total_price
+        )
+        db.add(db_item)
+    
+    # Delete the source invoice (it is now a receivable)
+    db.delete(invoice)
+    db.commit()
+    
+    return {"receivable_id": db_receivable.id}

@@ -52,7 +52,13 @@ def get_cashflow_forecast(
                 scores.append(0.5) # Should not happen for PAID status
                 continue
             
-            days_late = (last_payment.date - pr.due_date).days
+            # Defensive check for None due_date
+            effective_due_date = pr.due_date or pr.issue_date
+            if not effective_due_date:
+                scores.append(1.0)
+                continue
+
+            days_late = (last_payment.date - effective_due_date).days
             if days_late <= 0:
                 scores.append(1.0)
             elif days_late <= 7:
@@ -78,8 +84,9 @@ def get_cashflow_forecast(
 
         dso_days = []
         for pay, rec in recent_payments:
-            days = (pay.date - rec.issue_date).days
-            dso_days.append(max(0, days))
+            if rec.issue_date:
+                days = (pay.date - rec.issue_date).days
+                dso_days.append(max(0, days))
         
         current_dso = round(sum(dso_days) / len(dso_days), 1) if dso_days else 30.0
 
@@ -87,8 +94,8 @@ def get_cashflow_forecast(
         thirty_days_ago = now - datetime.timedelta(days=30)
         sixty_days_ago = now - datetime.timedelta(days=60)
         
-        dso_30 = [max(0, (p.date - r.issue_date).days) for p, r in recent_payments if p.date >= thirty_days_ago]
-        dso_60 = [max(0, (p.date - r.issue_date).days) for p, r in recent_payments if sixty_days_ago <= p.date < thirty_days_ago]
+        dso_30 = [max(0, (p.date - r.issue_date).days) for p, r in recent_payments if p.date >= thirty_days_ago and r.issue_date]
+        dso_60 = [max(0, (p.date - r.issue_date).days) for p, r in recent_payments if sixty_days_ago <= p.date < thirty_days_ago and r.issue_date]
         
         avg_30 = sum(dso_30) / len(dso_30) if dso_30 else current_dso
         avg_60 = sum(dso_60) / len(dso_60) if dso_60 else current_dso

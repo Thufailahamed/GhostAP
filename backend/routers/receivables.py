@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import datetime
 from services.accounting_service import AccountingService
-from services.auth import get_current_user
+from services.auth import get_current_user, get_current_user_from_query
 
 router = APIRouter(
     prefix="/receivables",
@@ -41,12 +41,13 @@ class ReceivableLineItemResponse(ReceivableLineItemBase):
     model_config = {"from_attributes": True}
 
 class ReceivableCreate(BaseModel):
-    invoice_number: str
+    invoice_number: Optional[str] = None
     customer_id: int
     due_date: Optional[datetime.datetime] = None
     total_amount: float
     currency: Optional[str] = "USD"
     exchange_rate: Optional[float] = None
+    pdf_path: Optional[str] = None
     items: List[ReceivableLineItemBase] = []
 
 class PaymentCreate(BaseModel):
@@ -75,6 +76,7 @@ class ReceivableResponse(BaseModel):
     paid_amount: float
     currency: str = "USD"
     exchange_rate: float = 1.0
+    pdf_path: Optional[str] = None
     status: str
     customer: CustomerResponse
     payments: List[PaymentResponse] = []
@@ -278,10 +280,15 @@ def create_receivable(receivable: ReceivableCreate, db: Session = Depends(get_db
     if not customer:
         raise HTTPException(status_code=400, detail="Customer not found or access denied")
         
-    # Verify uniqueness
-    existing = db.query(models.Receivable).filter(models.Receivable.invoice_number == receivable.invoice_number).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Invoice number already exists")
+    effective_invoice_number = receivable.invoice_number
+    if not effective_invoice_number:
+        import uuid
+        effective_invoice_number = f"REC-{datetime.datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+    else:
+        # Verify uniqueness only if provided
+        existing = db.query(models.Receivable).filter(models.Receivable.invoice_number == effective_invoice_number).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Invoice number already exists")
 
     from services.currency_service import CurrencyService
     
@@ -292,13 +299,14 @@ def create_receivable(receivable: ReceivableCreate, db: Session = Depends(get_db
 
     db_receivable = models.Receivable(
         user_id=user_id,
-        invoice_number=receivable.invoice_number,
+        invoice_number=effective_invoice_number,
         customer_id=receivable.customer_id,
         due_date=receivable.due_date,
         total_amount=receivable.total_amount,
         amount_base=receivable.total_amount * rate,
         currency=receivable.currency,
         exchange_rate=rate,
+        pdf_path=receivable.pdf_path,
         status=models.ReceivableStatus.SENT
     )
     db.add(db_receivable)
@@ -482,7 +490,7 @@ def record_payment(id: int, payment: PaymentCreate, db: Session = Depends(get_db
 
 
 @router.get("/{receivable_id}/pdf")
-def download_receivable_pdf(receivable_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+def download_receivable_pdf(receivable_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user_from_query)):
     """Generate and download a PDF invoice for a receivable."""
     user_id = current_user["sub"]
     rec = db.query(models.Receivable).filter(
@@ -507,6 +515,12 @@ def download_receivable_pdf(receivable_id: int, db: Session = Depends(get_db), c
         due_date=due_str,
         total_amount=rec.total_amount,
         paid_amount=rec.paid_amount or 0,
+        line_items=[{
+            "description": item.description,
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+            "total_price": item.total_price
+        } for item in rec.items]
     )
 
     filename = f"Invoice_{rec.invoice_number}.pdf"

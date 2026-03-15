@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   AlertTriangle,
   DollarSign,
+  RefreshCw,
 } from "lucide-react";
 
 import api from "@/lib/api";
@@ -58,6 +59,10 @@ export default function InvoiceDetailSplitView() {
     from: string;
     subject: string;
   } | null>(null);
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [isConverting, setIsConverting] = useState(false);
 
   // Fetch Live Data on Mount
   useEffect(() => {
@@ -114,6 +119,10 @@ export default function InvoiceDetailSplitView() {
             process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
           setPdfUrl(`${baseUrl}${data.pdf_path}`);
         }
+
+        // Fetch customers for conversion
+        const custRes = await api.get("/receivables/customers");
+        setCustomers(custRes.data);
       } catch (err) {
         console.error("Failed to load invoice:", err);
       } finally {
@@ -231,6 +240,24 @@ export default function InvoiceDetailSplitView() {
       }
     }
 
+    if (action === "CONVERT_RECEIVABLE") {
+      if (!selectedCustomerId) {
+        showToast("Please select a customer first.", "error");
+        return;
+      }
+      setIsConverting(true);
+      try {
+        const res = await api.post(`/invoices/${id}/convert-to-receivable?customer_id=${selectedCustomerId}`);
+        showToast("Successfully converted to Receivable record.", "success");
+        router.push(`/dashboard/receivables/${res.data.receivable_id}`);
+      } catch (err: any) {
+        showToast(err.response?.data?.detail || "Conversion failed.", "error");
+      } finally {
+        setIsConverting(false);
+      }
+      return;
+    }
+
     if (action === "APPROVE" && errors.length > 0) {
       showToast(
         "Cannot approve invoice with active critical validation errors.",
@@ -327,6 +354,14 @@ export default function InvoiceDetailSplitView() {
           >
             <Send size={16} /> SUBMIT TO ERP
           </Button>
+          <Button
+            variant="outline"
+            className="bg-transparent text-terminal-cyan border-terminal-cyan hover:bg-terminal-cyan hover:text-black gap-2 text-xs"
+            onClick={() => setIsConvertModalOpen(true)}
+          >
+            <RefreshCw size={16} /> CONVERT_TO_RECEIVABLE
+          </Button>
+
           {(invoiceStatus === "APPROVED" ||
             invoiceStatus === "SYNCED_TO_ERP" ||
             invoiceStatus === "PARTIAL") && (
@@ -720,6 +755,63 @@ export default function InvoiceDetailSplitView() {
                 }
               >
                 SUBMIT PAYMENT
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}      {/* Conversion Modal */}
+      {isConvertModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-terminal-bg border-2 border-terminal-cyan p-6 w-[400px] shadow-[0_0_30px_rgba(0,255,136,0.2)]">
+            <div className="flex justify-between items-center mb-6 pb-2 border-b-2 border-terminal-cyan">
+              <h2 className="text-xl font-bold text-terminal-cyan flex items-center gap-2">
+                <RefreshCw size={24} /> CONVERT TO RECEIVABLE
+              </h2>
+              <button
+                onClick={() => setIsConvertModalOpen(false)}
+                className="text-terminal-cyan hover:text-terminal-amber"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <p className="text-xs text-terminal-cyan/60 mb-6 font-mono leading-relaxed">
+              WARNING: This will re-classify this document as an Account Receivable. 
+              The current vendor invoice record will be deleted and replaced with a sales invoice.
+            </p>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-terminal-cyan/70 mb-2 block">
+                  Assign to Customer
+                </label>
+                <select 
+                  value={selectedCustomerId}
+                  onChange={(e) => setSelectedCustomerId(e.target.value)}
+                  className="w-full h-12 bg-black border-2 border-terminal-cyan text-terminal-cyan font-bold p-2 outline-none"
+                >
+                  <option value="">SELECT_CUSTOMER...</option>
+                  {customers.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-8 pt-4 border-t-2 border-terminal-cyan">
+              <Button
+                variant="outline"
+                className="bg-transparent text-terminal-cyan border-terminal-cyan hover:bg-terminal-cyan hover:text-black"
+                onClick={() => setIsConvertModalOpen(false)}
+              >
+                CANCEL
+              </Button>
+              <Button
+                className="bg-terminal-cyan text-black hover:bg-terminal-cyan/80 font-bold"
+                onClick={() => handleAction("CONVERT_RECEIVABLE")}
+                disabled={!selectedCustomerId || isConverting}
+              >
+                {isConverting ? "CONVERTING..." : "CONFIRM CONVERSION"}
               </Button>
             </div>
           </div>

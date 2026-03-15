@@ -92,11 +92,12 @@ def get_reports(db: Session = Depends(get_db), current_user: dict = Depends(get_
     user_id = current_user["sub"]
     # 1. Volume by Vendor (Top 5) - using base currency totals
     vendor_volume = db.query(
+        models.Vendor.id,
         models.Vendor.name,
         func.count(models.Invoice.id).label('count'),
         func.sum(models.Invoice.amount_base).label('total_base'),
         func.avg(models.Invoice.ai_confidence_score).label('avg_conf')
-    ).join(models.Invoice).filter(models.Invoice.user_id == user_id).group_by(models.Vendor.name).order_by(desc('count')).limit(5).all()
+    ).join(models.Invoice).filter(models.Invoice.user_id == user_id).group_by(models.Vendor.id, models.Vendor.name).order_by(desc('count')).limit(5).all()
     
     # 2. STP Rate (Straight Through Processing)
     # Defined as invoices with Confidence > 85% or those already approved
@@ -120,7 +121,7 @@ def get_reports(db: Session = Depends(get_db), current_user: dict = Depends(get_
 
     return {
         "stp_rate": stp_rate,
-        "vendor_volume": [{"vendor": v.name, "count": v.count, "failure_rate": round(100 - (v.avg_conf or 0), 1)} for v in vendor_volume],
+        "vendor_volume": [{"id": v.id, "vendor": v.name, "count": v.count, "failure_rate": round(100 - (v.avg_conf or 0), 1)} for v in vendor_volume],
         "category_volume": [{"name": c.name, "value": c.count} for c in category_volume],
         "exception_rate": round(100 - stp_rate, 1) # Simplistic proxy
     }
