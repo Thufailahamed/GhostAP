@@ -511,3 +511,79 @@ class ReceivableLineItem(Base):
     
     receivable = relationship("Receivable", back_populates="items")
     product = relationship("ProductItem")
+
+# --- Staff Payroll Feature (Phase 35) ---
+
+class PayrollStatus(str, enum.Enum):
+    DRAFT = "DRAFT"
+    PROCESSED = "PROCESSED"
+    PAID = "PAID"
+    CANCELLED = "CANCELLED"
+
+class Employee(Base):
+    __tablename__ = "employees"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True) # For multi-tenancy isolation
+    first_name = Column(String, nullable=False)
+    last_name = Column(String, nullable=False)
+    email = Column(String, index=True)
+    employee_id = Column(String, unique=True, index=True)
+    role = Column(String)
+    
+    salary_annual = Column(Float, default=0.0)
+    salary_monthly = Column(Float, default=0.0)
+    currency = Column(String, default="USD")
+    
+    bank_name = Column(String)
+    bank_account_number = Column(String)
+    
+    is_active = Column(Boolean, default=True)
+    created_at = Column(UTCDateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    
+    pay_slips = relationship("PaySlip", back_populates="employee")
+
+class PayrollRun(Base):
+    __tablename__ = "payroll_runs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    run_number = Column(String, unique=True, index=True) # e.g. PR-2026-03
+    
+    period_start = Column(UTCDateTime, nullable=False)
+    period_end = Column(UTCDateTime, nullable=False)
+    payment_date = Column(UTCDateTime)
+    
+    total_gross = Column(Float, default=0.0)
+    total_net = Column(Float, default=0.0)
+    total_tax = Column(Float, default=0.0)
+    currency = Column(String, default="USD")
+    
+    status = Column(Enum(PayrollStatus), default=PayrollStatus.DRAFT)
+    
+    # Ledger integration
+    journal_id = Column(Integer, ForeignKey("journal_entries.id"), nullable=True)
+    
+    created_at = Column(UTCDateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+    
+    journal = relationship("JournalEntry")
+    pay_slips = relationship("PaySlip", back_populates="payroll_run", cascade="all, delete-orphan")
+
+class PaySlip(Base):
+    __tablename__ = "pay_slips"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, index=True)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    payroll_run_id = Column(Integer, ForeignKey("payroll_runs.id"), nullable=False)
+    
+    gross_pay = Column(Float, nullable=False)
+    net_pay = Column(Float, nullable=False)
+    tax_deductions = Column(Float, default=0.0)
+    other_deductions = Column(Float, default=0.0)
+    
+    is_paid = Column(Boolean, default=False)
+    payment_reference = Column(String)
+    
+    employee = relationship("Employee", back_populates="pay_slips")
+    payroll_run = relationship("PayrollRun", back_populates="pay_slips")
