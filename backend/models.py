@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean, TypeDecorator
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum, Boolean, TypeDecorator, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 import enum
@@ -35,10 +35,14 @@ class Category(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, index=True) # For multi-tenancy isolation
-    code = Column(String, unique=True, index=True, nullable=False)
+    code = Column(String, index=True, nullable=False)
     name = Column(String, nullable=False)
     type = Column(Enum(CategoryType), nullable=False)
     description = Column(String)
+    parent_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
+    is_system = Column(Boolean, default=False) # Prevent deletion of system accounts
+
+    parent = relationship("Category", remote_side="Category.id")
 
 class CompanySettings(Base):
     __tablename__ = "company_settings"
@@ -443,7 +447,7 @@ class PurchaseOrder(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, index=True)
-    po_number = Column(String, index=True, unique=True, nullable=False)
+    po_number = Column(String, index=True, nullable=False)
     vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
     
     issue_date = Column(UTCDateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
@@ -456,6 +460,10 @@ class PurchaseOrder(Base):
     exchange_rate = Column(Float, default=1.0)
     notes = Column(String, nullable=True)
     created_at = Column(UTCDateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'po_number', name='uq_user_po_number'),
+    )
     
     vendor = relationship("Vendor")
     items = relationship("POLineItem", back_populates="purchase_order", cascade="all, delete-orphan")

@@ -9,9 +9,10 @@ import { useSettings } from "@/hooks/use-settings";
 import { CurrencyDisplay } from "@/components/ui/currency-display";
 
 export default function FinancialsPage() {
-  const [activeTab, setActiveTab] = useState<"PNL" | "BAL">("PNL");
+  const [activeTab, setActiveTab] = useState<"PNL" | "BAL" | "CASH">("PNL");
   const [pnlData, setPnlData] = useState<any>(null);
   const [balData, setBalData] = useState<any>(null);
+  const [cashData, setCashData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchFinancials = async () => {
@@ -20,9 +21,12 @@ export default function FinancialsPage() {
       if (activeTab === "PNL") {
         const res = await api.get("/financials/pnl");
         setPnlData(res.data);
-      } else {
+      } else if (activeTab === "BAL") {
         const res = await api.get("/financials/balance-sheet");
         setBalData(res.data);
+      } else {
+        const res = await api.get("/financials/cash-flow");
+        setCashData(res.data);
       }
     } catch (err) {
       console.error(`Failed to fetch ${activeTab}:`, err);
@@ -74,11 +78,11 @@ export default function FinancialsPage() {
       </div>
 
       {/* Report Controls */}
-      <div className="flex items-center gap-6 border-b-2 border-terminal-green pb-4">
-        <div className="flex gap-2">
+      <div className="flex items-center gap-6 border-b-2 border-terminal-green pb-4 overflow-x-auto">
+        <div className="flex gap-2 min-w-max">
           <button
             onClick={() => setActiveTab("PNL")}
-            className={`px-6 py-2 font-bold uppercase tracking-widest border-2 transition-all ${
+            className={`px-4 lg:px-6 py-2 font-bold uppercase tracking-widest border-2 transition-all text-xs lg:text-base ${
               activeTab === "PNL"
                 ? "bg-terminal-green text-black border-terminal-green"
                 : "bg-transparent text-terminal-green border-terminal-green hover:bg-terminal-green/20"
@@ -88,7 +92,7 @@ export default function FinancialsPage() {
           </button>
           <button
             onClick={() => setActiveTab("BAL")}
-            className={`px-6 py-2 font-bold uppercase tracking-widest border-2 transition-all ${
+            className={`px-4 lg:px-6 py-2 font-bold uppercase tracking-widest border-2 transition-all text-xs lg:text-base ${
               activeTab === "BAL"
                 ? "bg-terminal-green text-black border-terminal-green"
                 : "bg-transparent text-terminal-green border-terminal-green hover:bg-terminal-green/20"
@@ -96,11 +100,21 @@ export default function FinancialsPage() {
           >
             [ Balance Sheet ]
           </button>
+          <button
+            onClick={() => setActiveTab("CASH")}
+            className={`px-4 lg:px-6 py-2 font-bold uppercase tracking-widest border-2 transition-all text-xs lg:text-base ${
+              activeTab === "CASH"
+                ? "bg-terminal-green text-black border-terminal-green"
+                : "bg-transparent text-terminal-green border-terminal-green hover:bg-terminal-green/20"
+            }`}
+          >
+            [ Cash Flow ]
+          </button>
         </div>
 
         <div className="flex-1"></div>
 
-        <div className="flex items-center gap-2 border-2 border-terminal-green p-2 text-terminal-green font-bold text-xs uppercase tracking-widest">
+        <div className="flex items-center gap-2 border-2 border-terminal-green p-2 text-terminal-green font-bold text-xs uppercase tracking-widest whitespace-nowrap">
           <Calendar size={14} />
           <span>PERIOD:</span>
           <select className="bg-transparent text-terminal-green outline-none border-b border-terminal-green border-dashed pb-1 cursor-pointer font-bold">
@@ -128,6 +142,8 @@ export default function FinancialsPage() {
         <ProfitAndLossReport data={pnlData} formatFn={formatCurrency} />
       ) : activeTab === "BAL" && balData ? (
         <BalanceSheetReport data={balData} formatFn={formatCurrency} />
+      ) : activeTab === "CASH" && cashData ? (
+        <CashFlowReport data={cashData} formatFn={formatCurrency} />
       ) : (
         <div className="text-center text-terminal-amber font-bold p-8 border-2 border-dashed border-terminal-amber">
           NO DATA FOUND FOR CURRENT PERIOD
@@ -355,6 +371,129 @@ function BalanceSheetReport({
                 ]
               </span>
             )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CashFlowReport({
+  data,
+  formatFn,
+}: {
+  data: any;
+  formatFn: (v: number) => string;
+}) {
+  return (
+    <Card className="rounded-none border-4 border-black bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] text-black">
+      <CardHeader className="bg-gray-100 border-b-4 border-black pb-4">
+        <CardTitle className="text-xl font-black uppercase tracking-widest flex justify-between items-center">
+          <span>Statement of Cash Flows</span>
+          <span className="text-sm font-bold text-gray-500">INDIRECT METHOD</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        <div className="px-8 py-6 space-y-8">
+          {/* OPERATING ACTIVITIES */}
+          <div>
+            <h3 className="text-base font-black text-black uppercase tracking-widest mb-2 border-b-2 border-black pb-1">
+              Cash flows from operating activities
+            </h3>
+            <div className="space-y-1 pl-4">
+              <div className="flex justify-between text-sm font-bold items-center py-1">
+                <span>Net Income</span>
+                <CurrencyDisplay amount={data.operating_activities.net_income} />
+              </div>
+              <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-2 mb-1">
+                Adjustments to reconcile net income to net cash:
+              </div>
+              <div className="pl-4 space-y-1">
+                {data.operating_activities.adjustments?.map((adj: any, idx: number) => (
+                  <div
+                    key={idx}
+                    className="flex justify-between text-sm font-bold items-center py-1 hover:bg-gray-50"
+                  >
+                    <span>{adj.name}</span>
+                    <CurrencyDisplay amount={adj.amount} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex justify-between font-black text-sm border-t border-gray-300 mt-2 pt-1">
+              <span className="uppercase">Net cash provided by operating activities</span>
+              <CurrencyDisplay amount={data.operating_activities.total} />
+            </div>
+          </div>
+
+          {/* INVESTING ACTIVITIES */}
+          <div>
+            <h3 className="text-base font-black text-black uppercase tracking-widest mb-2 border-b-2 border-black pb-1">
+              Cash flows from investing activities
+            </h3>
+            <div className="space-y-1 pl-4">
+              {data.investing_activities.items?.map((item: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="flex justify-between text-sm font-bold items-center py-1 hover:bg-gray-50"
+                >
+                  <span>{item.name}</span>
+                  <CurrencyDisplay amount={item.amount} />
+                </div>
+              ))}
+              {data.investing_activities.items?.length === 0 && (
+                <div className="text-sm text-gray-400 font-bold italic py-1">
+                  No investing activities recorded
+                </div>
+              )}
+            </div>
+            <div className="flex justify-between font-black text-sm border-t border-gray-300 mt-2 pt-1">
+              <span className="uppercase">Net cash provided by (used in) investing activities</span>
+              <CurrencyDisplay amount={data.investing_activities.total} />
+            </div>
+          </div>
+
+          {/* FINANCING ACTIVITIES */}
+          <div>
+            <h3 className="text-base font-black text-black uppercase tracking-widest mb-2 border-b-2 border-black pb-1">
+              Cash flows from financing activities
+            </h3>
+            <div className="space-y-1 pl-4">
+              {data.financing_activities.items?.map((item: any, idx: number) => (
+                <div
+                  key={idx}
+                  className="flex justify-between text-sm font-bold items-center py-1 hover:bg-gray-50"
+                >
+                  <span>{item.name}</span>
+                  <CurrencyDisplay amount={item.amount} />
+                </div>
+              ))}
+              {data.financing_activities.items?.length === 0 && (
+                <div className="text-sm text-gray-400 font-bold italic py-1">
+                  No financing activities recorded
+                </div>
+              )}
+            </div>
+            <div className="flex justify-between font-black text-sm border-t border-gray-300 mt-2 pt-1">
+              <span className="uppercase">Net cash provided by (used in) financing activities</span>
+              <CurrencyDisplay amount={data.financing_activities.total} />
+            </div>
+          </div>
+
+          {/* SUMMARY SECTION */}
+          <div className="mt-8 border-t-4 border-black pt-4 space-y-2">
+            <div className="flex justify-between font-black text-lg border-b border-gray-200 pb-2">
+              <span className="uppercase">Net increase in cash</span>
+              <CurrencyDisplay amount={data.net_cash_increase} />
+            </div>
+            <div className="flex justify-between font-bold text-sm">
+              <span className="uppercase">Cash at beginning of period</span>
+              <CurrencyDisplay amount={data.beginning_cash} />
+            </div>
+            <div className="flex justify-between font-black text-xl uppercase bg-black text-white p-4 mt-4">
+              <span>Cash at end of period</span>
+              <CurrencyDisplay amount={data.ending_cash} />
+            </div>
           </div>
         </div>
       </CardContent>

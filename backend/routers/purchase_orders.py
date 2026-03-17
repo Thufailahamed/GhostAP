@@ -87,7 +87,8 @@ def create_purchase_order(po: POCreate, db: Session = Depends(get_db), current_u
         currency=po.currency,
         exchange_rate=rate,
         total_amount=total_amount,
-        amount_base=total_amount * rate
+        amount_base=total_amount * rate,
+        status=models.POStatus.ISSUED # Standard workflow: go straight to Issued
     )
     db.add(db_po)
     db.flush() # Get ID
@@ -127,6 +128,9 @@ def update_po_status(po_id: int, status: str, db: Session = Depends(get_db), cur
     ).first()
     if not db_po:
         raise HTTPException(status_code=404, detail="Purchase Order not found")
+        
+    if status not in [s.value for s in models.POStatus]:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
         
     db_po.status = status
     db.commit()
@@ -201,8 +205,25 @@ def convert_po_to_bill(po_id: int, db: Session = Depends(get_db), current_user: 
         exchange_rate=db_po.exchange_rate,
         status=models.InvoiceStatus.PENDING,
         ai_confidence_score=100.0, # Manually created from PO
+        issue_date=datetime.datetime.now(datetime.timezone.utc)
     )
     db.add(db_invoice)
+    db.flush()
+    
+    # 2. Transfer line items
+    for po_item in db_po.items:
+        db_item = models.LineItem(
+            invoice_id=db_invoice.id,
+            description=po_item.description,
+            quantity=po_item.quantity_received if po_item.quantity_received > 0 else po_item.quantity,
+            unit_price=po_item.unit_price,
+            total_price=po_item.total_price,
+            category_id=None # Vendor default or manual categorization later
+        )
+        db.add(db_item)
+        
+        # Track quantity billed on the PO side
+        po_item.quantity_billed = db_item.quantity
     
     db_po.status = models.POStatus.BILLED
     db.commit()

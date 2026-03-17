@@ -40,6 +40,7 @@ export default function PurchaseOrdersPage() {
   const [poCurrency, setPoCurrency] = useState("USD");
   const [expectedDate, setExpectedDate] = useState("");
   const [items, setItems] = useState<any[]>([{ description: "", quantity: 1, unit_price: 0, product_id: null }]);
+  const [receiptQuantities, setReceiptQuantities] = useState<Record<number, number>>({});
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -86,17 +87,31 @@ export default function PurchaseOrdersPage() {
 
   const handleReceive = async () => {
     try {
-      const itemsToReceive = selectedPO.items.map((it: any) => ({
-        item_id: it.id,
-        received: it.quantity - it.quantity_received
-      }));
+      const itemsToReceive = Object.entries(receiptQuantities)
+        .filter(([_, qty]) => qty > 0)
+        .map(([id, qty]) => ({
+          item_id: parseInt(id),
+          received: qty
+        }));
+
+      if (itemsToReceive.length === 0) {
+        alert("Enter quantities to receive in the 'RECEIVE_NOW' column.");
+        return;
+      }
+
       const res = await api.post(`/purchase-orders/${selectedPO.id}/receive`, itemsToReceive);
-      const updatedPO = { ...selectedPO, status: res.data.status };
+      
+      // Refresh detailed PO to get updated items
+      const refreshRes = await api.get(`/purchase-orders/${selectedPO.id}`);
+      const updatedPO = refreshRes.data;
+      
       setSelectedPO(updatedPO);
       setPos(pos.map(p => p.id === selectedPO.id ? updatedPO : p));
-      alert("All items marked as received!");
+      setReceiptQuantities({});
+      alert(`Update successful. Status: ${updatedPO.status}`);
     } catch (err) {
       console.error("Failed to receive items:", err);
+      alert("Error processing receipt. Check logs.");
     }
   };
 
@@ -421,6 +436,9 @@ export default function PurchaseOrdersPage() {
                              <th className="px-8 py-4">Item Description</th>
                              <th className="px-8 py-4 text-center">Qty Ordered</th>
                              <th className="px-8 py-4 text-center">Qty Received</th>
+                             { (selectedPO.status === 'ISSUED' || selectedPO.status === 'PARTIALLY_RECEIVED') && (
+                               <th className="px-8 py-4 text-center text-terminal-amber">Receive Now</th>
+                             )}
                              <th className="px-8 py-4 text-right">Unit Price</th>
                              <th className="px-8 py-4 text-right">Total</th>
                           </tr>
@@ -430,17 +448,33 @@ export default function PurchaseOrdersPage() {
                              <tr key={item.id} className="border-b border-terminal-green/10">
                                 <td className="px-8 py-6 font-bold uppercase">{item.description}</td>
                                 <td className="px-8 py-6 text-center font-mono">{item.quantity}</td>
-                                <td className="px-8 py-6 text-center font-mono">
-                                   <span className={item.quantity_received === item.quantity ? "text-terminal-green" : "text-terminal-amber font-black"}>
-                                      {item.quantity_received}
-                                   </span>
+                                <td className="px-8 py-6 text-center font-mono text-terminal-amber">
+                                   {item.quantity_received} / {item.quantity}
                                 </td>
+                                { (selectedPO.status === 'ISSUED' || selectedPO.status === 'PARTIALLY_RECEIVED') && (
+                                  <td className="px-8 py-6 text-center">
+                                     {item.quantity_received < item.quantity ? (
+                                       <Input 
+                                         type="number"
+                                         className="w-20 mx-auto bg-black border-terminal-amber text-terminal-amber h-8 text-xs text-center rounded-none"
+                                         placeholder="0"
+                                         value={receiptQuantities[item.id] || ""}
+                                         onChange={(e) => setReceiptQuantities({
+                                           ...receiptQuantities,
+                                           [item.id]: parseFloat(e.target.value) || 0
+                                         })}
+                                       />
+                                     ) : (
+                                       <CheckCircle2 size={16} className="mx-auto text-terminal-green opacity-50" />
+                                     )}
+                                  </td>
+                                )}
                                  <td className="px-8 py-6 text-right font-mono"><CurrencyDisplay amount={item.unit_price} currency={selectedPO.currency} /></td>
                                  <td className="px-8 py-6 text-right font-black text-terminal-cyan"><CurrencyDisplay amount={item.total_price} currency={selectedPO.currency} /></td>
                              </tr>
                           ))}
                           <tr className="bg-terminal-green/5">
-                              <td colSpan={4} className="px-8 py-6 text-right font-bold uppercase text-terminal-green/60">Total Commitment Value</td>
+                              <td colSpan={(selectedPO.status === 'ISSUED' || selectedPO.status === 'PARTIALLY_RECEIVED') ? 5 : 4} className="px-8 py-6 text-right font-bold uppercase text-terminal-green/60">Total Commitment Value</td>
                               <td className="px-8 py-6 text-right font-black text-2xl text-terminal-cyan"><CurrencyDisplay amount={selectedPO.total_amount} currency={selectedPO.currency} /></td>
                           </tr>
                        </tbody>
@@ -462,12 +496,12 @@ export default function PurchaseOrdersPage() {
                     >
                        PRINT_PO_TELEGRAM
                     </Button>
-                    {selectedPO.status === 'ISSUED' && (
+                    {(selectedPO.status === 'ISSUED' || selectedPO.status === 'PARTIALLY_RECEIVED') && (
                        <Button 
                           onClick={handleReceive}
                           className="w-full bg-terminal-amber text-black hover:bg-terminal-amber/80 border-none font-bold uppercase h-12"
                        >
-                          MARK_CARGO_RECEIVED
+                          PROCESS_CARGO_RECEIPT
                        </Button>
                     )}
                     {(selectedPO.status === 'RECEIVED' || selectedPO.status === 'PARTIALLY_RECEIVED') && (

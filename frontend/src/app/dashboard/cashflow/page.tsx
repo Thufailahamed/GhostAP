@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Repeat,
+  CheckCircle,
 } from "lucide-react";
 import api from "@/lib/api";
 import { useToast } from "@/components/ui/toast";
@@ -134,6 +135,9 @@ interface ForecastData {
   variance_amount: number;
   variance_pct: number;
   sparkline_data: number[];
+  bank_balance: number;
+  ledger_balance: number;
+  reconciliation_variance: number;
 }
 
 function Sparkline({ data }: { data: number[] }) {
@@ -198,7 +202,8 @@ export default function CashFlowPage() {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      if (!data) setLoading(true);
+      
       let endDate = "";
       const now = new Date();
       if (dateRange === "2W") {
@@ -221,9 +226,18 @@ export default function CashFlowPage() {
         `/cashflow/forecast${endDate ? `?end_date=${endDate}` : ""}`,
       );
       setData(response.data);
+      setLoading(false);
+
+      // Fetch Slow AI Advice separately without blocking
+      api.get("/cashflow/strategic-advice").then(adviceRes => {
+          setData((prev: any) => ({
+              ...prev,
+              ai_insights: adviceRes.data.advice
+          }));
+      }).catch(err => console.error("AI Advice fetch failed:", err));
+
     } catch (error) {
       showToast("Failed to fetch forecast data", "error");
-    } finally {
       setLoading(false);
     }
   };
@@ -585,21 +599,13 @@ export default function CashFlowPage() {
       maximumFractionDigits: 0,
     }).format(val);
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-terminal-green font-mono font-bold uppercase tracking-widest animate-pulse flex items-center gap-3">
           <Brain size={24} className="animate-spin" />
-          Analyzing Cash Flow Patterns...
+          Synchronizing Neural Core...
         </div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="text-center p-12 text-terminal-red font-mono font-bold uppercase">
-        Failed to load forecast data.
       </div>
     );
   }
@@ -673,7 +679,7 @@ export default function CashFlowPage() {
       </div>
 
       {/* Smart Alerts Strip */}
-      {data.smart_alerts && data.smart_alerts.length > 0 && (
+      {data?.smart_alerts && data.smart_alerts.length > 0 && (
         <div className="flex flex-col gap-2">
           {data.smart_alerts.map((alert, i) => (
             <div
@@ -707,23 +713,58 @@ export default function CashFlowPage() {
       )}
 
       {/* Current Balance + Forecast Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      {!data ? (
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="md:col-span-2 h-48 border-2 border-terminal-green/20 bg-black animate-pulse flex items-center justify-center">
+            <span className="text-[10px] text-terminal-green/30 uppercase font-mono tracking-widest">Hydrating Liquidity Position...</span>
+          </div>
+          {[1,2,3].map(i => (
+             <div key={i} className="h-48 border-2 border-terminal-green/10 bg-black animate-pulse" />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {/* Hero Balance Card */}
         <div className="md:col-span-2 border-2 border-terminal-green bg-black p-8 flex justify-between items-center group relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-30 group-hover:opacity-100 transition-opacity">
             <Sparkline data={data.sparkline_data} />
           </div>
 
-          <div>
+          <div className="w-full">
             <div className="text-terminal-green/60 uppercase text-[10px] tracking-[0.3em] mb-3 flex items-center gap-2">
               <div className="w-1.5 h-1.5 bg-terminal-green" />
               Current Liquidity Position
             </div>
-            <div className="text-6xl font-black text-terminal-green tracking-tighter flex items-end gap-4">
-              <CurrencyDisplay amount={data.current_balance} />
-              <div className="flex flex-col mb-2">
+            
+            <div className="flex flex-col md:flex-row md:items-end gap-6">
+              <div className="flex items-baseline gap-4">
+                <div className="text-6xl font-black text-terminal-green tracking-tighter">
+                  <CurrencyDisplay amount={data.ledger_balance} />
+                </div>
+                <div className="text-[10px] text-terminal-green/60 font-bold uppercase pb-1 flex flex-col">
+                    <span>Ledger Balance</span>
+                    <span className="text-[8px] opacity-50">SOURCE_OF_TRUTH</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col mb-1 border-l border-terminal-green/20 pl-6">
+                <div className="text-[9px] text-terminal-green/40 uppercase font-black mb-0.5">Bank Statement</div>
+                <div className="text-xl font-black text-white/90 tracking-tighter">
+                  <CurrencyDisplay amount={data.bank_balance} />
+                </div>
+                <div className={`text-[10px] font-bold uppercase flex items-center gap-1 mt-1 ${Math.abs(data.reconciliation_variance) < 0.01 ? "text-terminal-green" : "text-terminal-amber animate-pulse"}`}>
+                    {Math.abs(data.reconciliation_variance) < 0.01 ? (
+                        <CheckCircle size={10} />
+                    ) : (
+                        <AlertTriangle size={10} />
+                    )}
+                    {Math.abs(data.reconciliation_variance) < 0.01 ? "RECONCILED" : `FLOAT: ${formatCurrency(Math.abs(data.reconciliation_variance))}`}
+                </div>
+              </div>
+
+              <div className="hidden lg:flex flex-col mb-2 ml-auto text-right">
                 <div
-                  className={`text-sm font-bold flex items-center gap-1 ${data.variance_amount >= 0 ? "text-terminal-green" : "text-terminal-red"}`}
+                  className={`text-sm font-bold flex items-center justify-end gap-1 ${data.variance_amount >= 0 ? "text-terminal-green" : "text-terminal-red"}`}
                 >
                   {data.variance_amount >= 0 ? (
                     <ArrowUpRight size={18} />
@@ -782,74 +823,78 @@ export default function CashFlowPage() {
       </div>
 
       {/* Scenario Planning Controls */}
-      <div className="border-2 border-terminal-green bg-black p-4 flex gap-8 items-center">
-        <div className="flex items-center gap-2 text-terminal-green uppercase tracking-widest text-sm font-bold min-w-[200px]">
-          <TrendingUp size={16} /> What-If Scenarios
-        </div>
+      {!data ? (
+        <div className="h-20 border-2 border-terminal-green/10 bg-black animate-pulse" />
+      ) : (
+        <div className="border-2 border-terminal-green bg-black p-4 flex gap-8 items-center">
+          <div className="flex items-center gap-2 text-terminal-green uppercase tracking-widest text-sm font-bold min-w-[200px]">
+            <TrendingUp size={16} /> What-If Scenarios
+          </div>
 
-        <div className="flex-1 max-w-sm">
-          <label className="flex justify-between text-xs text-terminal-green/70 uppercase tracking-widest mb-2">
-            <span>Revenue Impact</span>
-            <span>{Math.round((revenueMultiplier - 1) * 100)}%</span>
-          </label>
-          <input
-            type="range"
-            min="0.5"
-            max="1.5"
-            step="0.05"
-            value={revenueMultiplier}
-            onChange={(e) => setRevenueMultiplier(parseFloat(e.target.value))}
-            className="w-full h-1 bg-terminal-green/30 rounded-lg appearance-none cursor-pointer accent-terminal-cyan"
-          />
-        </div>
+          <div className="flex-1 max-w-sm">
+            <label className="flex justify-between text-xs text-terminal-green/70 uppercase tracking-widest mb-2">
+              <span>Revenue Impact</span>
+              <span>{Math.round((revenueMultiplier - 1) * 100)}%</span>
+            </label>
+            <input
+              type="range"
+              min="0.5"
+              max="1.5"
+              step="0.05"
+              value={revenueMultiplier}
+              onChange={(e) => setRevenueMultiplier(parseFloat(e.target.value))}
+              className="w-full h-1 bg-terminal-green/30 rounded-lg appearance-none cursor-pointer accent-terminal-cyan"
+            />
+          </div>
 
-        <div className="flex-1 max-w-sm">
-          <label className="flex justify-between text-xs text-terminal-green/70 uppercase tracking-widest mb-2">
-            <span>Global Payment Delay</span>
-            <span>+{paymentDelay} Days</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="60"
-            step="3"
-            value={paymentDelay}
-            onChange={(e) => setPaymentDelay(parseInt(e.target.value))}
-            className="w-full h-1 bg-terminal-green/30 rounded-lg appearance-none cursor-pointer accent-terminal-red"
-          />
-        </div>
+          <div className="flex-1 max-w-sm">
+            <label className="flex justify-between text-xs text-terminal-green/70 uppercase tracking-widest mb-2">
+              <span>Global Payment Delay</span>
+              <span>+{paymentDelay} Days</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="60"
+              step="1"
+              value={paymentDelay}
+              onChange={(e) => setPaymentDelay(parseInt(e.target.value))}
+              className="w-full h-1 bg-terminal-green/30 rounded-lg appearance-none cursor-pointer accent-terminal-amber"
+            />
+          </div>
 
-        <div className="flex-1 max-w-sm">
-          <label className="flex justify-between text-xs text-terminal-green/70 uppercase tracking-widest mb-2">
-            <span>Min Safe Balance</span>
-            <span>{formatCurrency(cashCushion)}</span>
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="200000"
-            step="5000"
-            value={cashCushion}
-            onChange={(e) => setCashCushion(parseInt(e.target.value))}
-            className="w-full h-1 bg-terminal-green/30 rounded-lg appearance-none cursor-pointer accent-terminal-amber"
-          />
-        </div>
+          <div className="flex-1 max-w-sm">
+            <label className="flex justify-between text-xs text-terminal-green/70 uppercase tracking-widest mb-2">
+              <span>Min Safe Balance</span>
+              <span>{formatCurrency(cashCushion)}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="200000"
+              step="5000"
+              value={cashCushion}
+              onChange={(e) => setCashCushion(parseInt(e.target.value))}
+              className="w-full h-1 bg-terminal-green/30 rounded-lg appearance-none cursor-pointer accent-terminal-amber"
+            />
+          </div>
 
-        {(revenueMultiplier !== 1.0 ||
-          paymentDelay > 0 ||
-          cashCushion !== 50000) && (
-          <button
-            onClick={() => {
-              setRevenueMultiplier(1.0);
-              setPaymentDelay(0);
-              setCashCushion(50000);
-            }}
-            className="px-3 py-1 border border-terminal-red text-terminal-red text-[10px] uppercase font-bold hover:bg-terminal-red hover:text-black transition-colors"
-          >
-            Reset Scenarios
-          </button>
-        )}
-      </div>
+          {(revenueMultiplier !== 1.0 ||
+            paymentDelay > 0 ||
+            cashCushion !== 50000) && (
+            <button
+              onClick={() => {
+                setRevenueMultiplier(1.0);
+                setPaymentDelay(0);
+                setCashCushion(50000);
+              }}
+              className="px-3 py-1 border border-terminal-red text-terminal-red text-[10px] uppercase font-bold hover:bg-terminal-red hover:text-black transition-colors"
+            >
+              Reset Scenarios
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Liquidity Guard Banner */}
       {cushionMetrics.breachDays !== null && (
@@ -995,7 +1040,11 @@ export default function CashFlowPage() {
         <h2 className="text-sm font-bold uppercase tracking-widest text-terminal-green mb-6 flex items-center gap-2">
           <TrendingUp size={16} /> 30-Day Cash Flow Bridge (Waterfall)
         </h2>
-        <WaterfallChart data={data.waterfall_data} />
+        {data ? (
+          <WaterfallChart data={data.waterfall_data} />
+        ) : (
+          <div className="h-64 bg-terminal-green/5 animate-pulse" />
+        )}
       </div>
 
       {/* Advanced Analytics */}
@@ -1328,7 +1377,12 @@ export default function CashFlowPage() {
             <Brain size={16} /> AI Strategic Advisor
           </h2>
           <div className="text-sm text-terminal-green leading-relaxed whitespace-pre-wrap">
-            {data.ai_insights}
+            {data.ai_insights || (
+              <div className="flex items-center gap-2 text-terminal-amber/60 italic animate-pulse">
+                <RefreshCw size={14} className="animate-spin" />
+                Consulting strategic engine...
+              </div>
+            )}
           </div>
           {(data.recurring_monthly_obligation > 0 ||
             data.subscription_monthly > 0) && (

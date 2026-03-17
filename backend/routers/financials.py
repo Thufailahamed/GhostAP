@@ -34,3 +34,14 @@ def get_balance_sheet(
     if not as_of_date:
         as_of_date = datetime.date.today()
     return ReportingService.generate_balance_sheet(db, as_of_date, user_id=user_id)
+
+@router.get("/cash-flow")
+def get_cash_flow(
+    start_date: Optional[datetime.date] = None,
+    end_date: Optional[datetime.date] = None,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get the Statement of Cash Flows."""
+    user_id = current_user["sub"]
+    return ReportingService.generate_cash_flow_statement(db, start_date, end_date, user_id=user_id)

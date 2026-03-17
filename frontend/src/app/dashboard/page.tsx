@@ -26,7 +26,8 @@ import {
   CheckCircle,
   XCircle,
   Activity,
-  DollarSign, TrendingUp, TrendingDown, Cpu, Terminal, Zap, RefreshCw, Send, Download
+  DollarSign, TrendingUp, TrendingDown, Cpu, Terminal, Zap, RefreshCw, Send, Download,
+  BarChart2, PieChart as PieChartIcon
 } from "lucide-react";
 
 import { useState, useEffect } from "react";
@@ -54,37 +55,64 @@ export default function DashboardPage() {
   const { settings } = useSettings();
 
   const fetchDashboardData = async () => {
+    // 1. Fetch "Instant" Data (Core Telemetry)
+    const fetchCoreData = async () => {
+      try {
+        const [invRes, statsRes, cashflowRes] = await Promise.all([
+          api.get("/invoices"),
+          api.get("/analytics/dashboard-stats"),
+          api.get("/cashflow/forecast"),
+        ]);
+  
+        setInvoices(invRes.data);
+        const analytics = statsRes.data;
+  
+        setStats({
+          total: analytics.stats.total,
+          approved: analytics.stats.approved,
+          pending: analytics.stats.pending,
+          rejected: analytics.stats.rejected,
+          avgConfidence: analytics.stats.avgConfidence,
+        });
+  
+        setVolumeData(analytics.throughput);
+        setProcessingTimeData(analytics.processingTime);
+        setCashflow(cashflowRes.data);
+        
+        // After forecast, trigger advisor
+        api.get("/cashflow/strategic-advice").then(adviceRes => {
+            setCashflow((prev: any) => ({
+                ...prev,
+                ai_insights: adviceRes.data.advice
+            }));
+        }).catch(err => console.error("AI Advice fetch failed:", err));
+
+      } catch (err) {
+        console.error("Core dashboard fetch failed:", err);
+      }
+    };
+
+    // 2. Fetch "AI/Deep" Data (Engine Metrics)
+    const fetchAIData = async () => {
+      try {
+        const [reportsRes, aiMetricsRes] = await Promise.all([
+          api.get("/analytics/reports"),
+          api.get("/analytics/ai-metrics"),
+        ]);
+        setReports(reportsRes.data);
+        setAiMetrics(aiMetricsRes.data);
+      } catch (err) {
+        console.error("AI data fetch failed:", err);
+      }
+    };
+
     setIsLoading(true);
-    try {
-      const [invRes, statsRes, reportsRes, aiMetricsRes, cashflowRes] = await Promise.all([
-        api.get("/invoices"),
-        api.get("/analytics/dashboard-stats"),
-        api.get("/analytics/reports"),
-        api.get("/analytics/ai-metrics"),
-        api.get("/cashflow/forecast"),
-      ]);
-
-      setInvoices(invRes.data);
-      const analytics = statsRes.data;
-
-      setStats({
-        total: analytics.stats.total,
-        approved: analytics.stats.approved,
-        pending: analytics.stats.pending,
-        rejected: analytics.stats.rejected,
-        avgConfidence: analytics.stats.avgConfidence,
-      });
-
-      setVolumeData(analytics.throughput);
-      setProcessingTimeData(analytics.processingTime);
-      setReports(reportsRes.data);
-      setAiMetrics(aiMetricsRes.data);
-      setCashflow(cashflowRes.data);
-    } catch (err) {
-      console.error("Dashboard fetch failed:", err);
-    } finally {
-      setIsLoading(false);
-    }
+    // Fire both, but don't await them combined
+    await fetchCoreData();
+    setIsLoading(false);
+    
+    // AI data can finish later
+    fetchAIData();
   };
 
   useEffect(() => {
@@ -198,10 +226,26 @@ export default function DashboardPage() {
       {cashflow && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-2">
           <KpiCard
-            title="CURRENT_CASH_BALANCE"
-            value={<CurrencyDisplay amount={cashflow.current_balance} />}
+            title="CASH_ON_HAND"
+            value={<CurrencyDisplay amount={cashflow.ledger_balance} />}
             icon={<DollarSign size={18} />}
-            sub="Liquid Assets"
+            sub={
+              <div className="flex flex-col gap-0.5 mt-0.5">
+                <span className="text-[9px] opacity-70">LEDGER (SOURCE OF TRUTH)</span>
+                {cashflow.bank_balance !== undefined && (
+                  <div className="flex items-center gap-1.5 border-t border-terminal-cyan/20 pt-1 mt-1">
+                    <span className="text-[10px] font-bold text-white/90">
+                      BANK: <CurrencyDisplay amount={cashflow.bank_balance} />
+                    </span>
+                    {Math.abs(cashflow.reconciliation_variance) > 0.01 && (
+                      <span className="text-[8px] px-1 bg-terminal-amber/20 text-terminal-amber animate-pulse border border-terminal-amber/30">
+                        UNCLEARED
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            }
             color="text-terminal-cyan"
           />
           <KpiCard
@@ -246,7 +290,19 @@ export default function DashboardPage() {
       )}
 
       {/* AI Engine Status */}
-      {aiMetrics && reports && (
+      {(!aiMetrics || !reports) ? (
+        <div className="border border-terminal-cyan/30 bg-terminal-cyan/5 p-6 mt-2 animate-pulse min-h-[150px] flex flex-col justify-center">
+           <div className="flex justify-between border-b border-terminal-cyan/10 pb-2 mb-4">
+              <h2 className="text-sm font-bold uppercase tracking-widest text-terminal-cyan/40 flex items-center gap-2">
+                <Cpu size={16} /> AI Engine Status // INITIALIZING...
+              </h2>
+           </div>
+           <div className="flex items-center gap-3 text-terminal-cyan/30 font-mono text-xs tracking-widest uppercase">
+              <RefreshCw className="animate-spin" size={14} /> 
+              Synchronizing with Neural Processing Unit... [CALCULATING_METRICS]
+           </div>
+        </div>
+      ) : (
         <div className="border border-terminal-cyan/30 bg-terminal-cyan/5 p-6 mt-2">
           <div className="flex justify-between border-b border-terminal-cyan/20 pb-2 mb-4">
              <h2 className="text-sm font-bold uppercase tracking-widest text-terminal-cyan flex items-center gap-2">
@@ -437,7 +493,12 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {reports && (
+        {!reports ? (
+          <div className="rounded-none border-2 border-terminal-green/30 bg-terminal-panel/50 p-6 flex flex-col justify-center items-center h-80 animate-pulse">
+            <BarChart2 className="text-terminal-green/20" size={40} />
+            <span className="text-[10px] text-terminal-green/40 uppercase mt-4 tracking-widest">Compiling Vendor Analytics...</span>
+          </div>
+        ) : (
           <Card className="rounded-none border-2 border-terminal-green bg-terminal-panel text-terminal-green">
             <CardHeader className="border-b border-terminal-green/30">
               <CardTitle className="text-xs tracking-widest uppercase opacity-60">
@@ -465,7 +526,12 @@ export default function DashboardPage() {
           </Card>
         )}
 
-        {reports && (
+        {!reports ? (
+          <div className="rounded-none border-2 border-terminal-green/30 bg-terminal-panel/50 p-6 flex flex-col justify-center items-center h-80 animate-pulse">
+            <PieChartIcon className="text-terminal-green/20" size={40} />
+            <span className="text-[10px] text-terminal-green/40 uppercase mt-4 tracking-widest">Aggregating Category Splits...</span>
+          </div>
+        ) : (
           <Card className="rounded-none border-2 border-terminal-green bg-terminal-panel text-terminal-green">
             <CardHeader className="border-b border-terminal-green/30">
               <CardTitle className="text-xs tracking-widest uppercase opacity-60">
@@ -664,7 +730,7 @@ function KpiCard({
 }: {
   title: string;
   value: string | React.ReactNode;
-  sub: string;
+  sub: string | React.ReactNode;
   icon: React.ReactNode;
   color?: string;
 }) {
@@ -680,9 +746,9 @@ function KpiCard({
         <div className={`text-2xl font-bold tracking-widest ${color}`}>
           {value}
         </div>
-        <p className="text-[10px] font-bold uppercase text-terminal-green/30 mt-1">
+        <div className="text-[10px] font-bold uppercase text-terminal-green/30 mt-1">
           {sub}
-        </p>
+        </div>
       </div>
     </div>
   );

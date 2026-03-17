@@ -30,43 +30,35 @@ def get_cashflow_forecast(
     settings = db.query(models.CompanySettings).filter(models.CompanySettings.user_id == user_id).first()
     base_currency = settings.base_currency if settings else "USD"
 
-    # Helper: Calculate Customer Reliability
+    # Optimized Helper: Batch calculate customer reliability if possible
+    # For now, let's at least optimize the individual call with a join
     def _get_customer_reliability(cid: int) -> float:
-        # Get last 10 paid receivables for this customer
-        past_receivables = db.query(models.Receivable).filter(
+        # Get last 5 paid receivables with their latest payment in one join
+        past_data = db.query(
+            models.Receivable, 
+            func.max(models.PaymentReceived.date).label("last_pay_date")
+        ).join(
+            models.PaymentReceived, models.Receivable.id == models.PaymentReceived.receivable_id
+        ).filter(
             models.Receivable.customer_id == cid,
             models.Receivable.status == models.ReceivableStatus.PAID
-        ).order_by(models.Receivable.due_date.desc()).limit(10).all()
+        ).group_by(models.Receivable.id).order_by(models.Receivable.due_date.desc()).limit(5).all()
         
-        if not past_receivables:
-            return 0.85 # Default for new customers
+        if not past_data:
+            return 0.85
         
         scores = []
-        for pr in past_receivables:
-            # Find the latest payment date for this receivable
-            last_payment = db.query(models.PaymentReceived).filter(
-                models.PaymentReceived.receivable_id == pr.id
-            ).order_by(models.PaymentReceived.date.desc()).first()
-            
-            if not last_payment:
-                scores.append(0.5) # Should not happen for PAID status
-                continue
-            
-            # Defensive check for None due_date
-            effective_due_date = pr.due_date or pr.issue_date
-            if not effective_due_date:
+        for rec, last_pay_date in past_data:
+            effective_due = rec.due_date or rec.issue_date
+            if not effective_due or not last_pay_date:
                 scores.append(1.0)
                 continue
-
-            days_late = (last_payment.date - effective_due_date).days
-            if days_late <= 0:
-                scores.append(1.0)
-            elif days_late <= 7:
-                scores.append(0.9)
-            elif days_late <= 30:
-                scores.append(0.7)
-            else:
-                scores.append(0.4)
+            
+            days_late = (last_pay_date - effective_due).days
+            if days_late <= 0: scores.append(1.0)
+            elif days_late <= 7: scores.append(0.9)
+            elif days_late <= 30: scores.append(0.7)
+            else: scores.append(0.4)
         
         return round(sum(scores) / len(scores), 2)
 
@@ -159,7 +151,7 @@ def get_cashflow_forecast(
 
     wc_metrics = _get_working_capital_metrics()
 
-    # 1. Current cash balance (sum of all bank account transactions - using amount_base)
+    # 1. Bank Balance (sum of all bank account transactions - using amount_base)
     total_incoming = db.query(func.coalesce(func.sum(models.BankTransaction.amount_base), 0)).filter(
         models.BankTransaction.user_id == user_id,
         models.BankTransaction.amount_base > 0
@@ -170,7 +162,21 @@ def get_cashflow_forecast(
         models.BankTransaction.amount_base < 0
     ).scalar() or 0
 
-    current_balance = float(total_incoming) + float(total_outgoing)  # outgoing is negative
+    bank_balance = float(total_incoming) + float(total_outgoing)  # outgoing is negative
+
+    # 1.1 Ledger Balance (Sum of all 'Asset' accounts typically used for cash)
+    ledger_balance = db.query(
+        func.coalesce(func.sum(models.JournalLine.debit - models.JournalLine.credit), 0)
+    ).join(
+        models.Category, models.JournalLine.account_id == models.Category.id
+    ).filter(
+        models.JournalLine.user_id == user_id,
+        models.Category.type == models.CategoryType.ASSET,
+        models.Category.name.ilike("%cash%")
+    ).scalar() or 0.0
+
+    # Primary dashboard balance will now be the Ledger Balance for consistency with CoA
+    current_balance = float(ledger_balance)
 
     # 1.5. 30-Day Variance & Sparkline
     thirty_days_ago = now - datetime.timedelta(days=30)
@@ -762,9 +768,6 @@ def get_cashflow_forecast(
     ending_bal = forecast_30d["projected_balance"]
     waterfall_data.append({"label": "30d Forecast", "amount": round(ending_bal, 2), "type": "total"})
 
-    # 9. AI Strategic Advice (ONLY for high-level strategy that can't be computed)
-    ai_insights = _generate_strategic_advice(analytics, current_balance, forecast_90d, base_currency)
-
     # 10. Recent Bank Transactions (Last 10)
     recent_txns = db.query(models.BankTransaction).filter(
         models.BankTransaction.user_id == user_id
@@ -786,7 +789,7 @@ def get_cashflow_forecast(
         "forecast_30d": forecast_30d,
         "forecast_60d": forecast_60d,
         "forecast_90d": forecast_90d,
-        "ai_insights": ai_insights,
+        "ai_insights": None, # Moved to /strategic-advice for performance
         "smart_alerts": smart_alerts,
         "confidence_score": round(confidence_score, 1),
         "chart_data": chart_data,
@@ -800,7 +803,22 @@ def get_cashflow_forecast(
         "sparkline_data": sparkline_data,
         "analytics": analytics,
         "recent_transactions": recent_transactions,
-        "base_currency": base_currency
+        "base_currency": base_currency,
+        "bank_balance": round(bank_balance, 2),
+        "ledger_balance": round(ledger_balance, 2),
+        "reconciliation_variance": round(bank_balance - float(ledger_balance), 2)
+    }
+
+@router.get("/strategic-advice")
+def get_strategic_advice(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    """Slow AI-based strategic advice in a separate endpoint."""
+    user_id = current_user["sub"]
+    # We call the forecast logic internally but without the AI part if we can,
+    # or just fetch the necessary analytics.
+    # To keep it simple, we'll just call get_cashflow_forecast and then the AI.
+    data = get_cashflow_forecast(db=db, current_user=current_user)
+    return {
+        "advice": _generate_strategic_advice(data["analytics"], data["current_balance"], data["forecast_90d"], data["base_currency"])
     }
 
 

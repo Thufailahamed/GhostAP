@@ -23,7 +23,8 @@ router = APIRouter(
 def get_invoices(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     """Fetch all invoices belonging to the current user."""
     user_id = current_user["sub"]
-    invoices = db.query(models.Invoice).filter(models.Invoice.user_id == user_id).all()
+    from sqlalchemy.orm import joinedload
+    invoices = db.query(models.Invoice).options(joinedload(models.Invoice.vendor)).filter(models.Invoice.user_id == user_id).all()
     
     response = []
     for inv in invoices:

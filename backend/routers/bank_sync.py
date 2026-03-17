@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from database import get_db
 import models
@@ -12,6 +12,8 @@ import requests
 import json
 from services.auth import get_current_user
 from services.accounting_service import AccountingService
+from services.csv_import import parse_csv
+from services.currency_service import CurrencyService
 
 router = APIRouter(prefix="/bank-sync", tags=["Bank Sync"])
 
@@ -42,13 +44,28 @@ class CallbackRequest(BaseModel):
     data: CallbackData
     meta: Optional[dict] = None
 
+class BankAccountResponse(BaseModel):
+    id: int
+    connection_id: Optional[int]
+    name: str
+    bank_name: Optional[str]
+    account_number: Optional[str]
+    type: str
+    currency: str
+    balance_current: float
+    model_config = {"from_attributes": True}
+
 class BankConnectionResponse(BaseModel):
     id: int
     institution_name: str
     status: str
-    last_sync: Optional[datetime.datetime]
-    created_at: datetime.datetime
+    last_synced: Optional[datetime.datetime] = None
     model_config = {"from_attributes": True}
+
+@router.get("/accounts", response_model=List[BankAccountResponse])
+def get_bank_accounts(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    user_id = current_user["sub"]
+    return db.query(models.BankAccount).filter(models.BankAccount.user_id == user_id).all()
 
 class LinkMockRequest(BaseModel):
     institution_name: str # e.g. "Chase", "Bank of America"
@@ -335,3 +352,87 @@ def sync_all_connections(db: Session = Depends(get_db), current_user: dict = Dep
         
     db.commit()
     return {"status": "success", "new_transactions": total_new_txns}
+
+@router.post("/accounts/{account_id}/import-csv")
+async def import_bank_csv(
+    account_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Import bank transactions from a CSV file for a specific account."""
+    user_id = current_user["sub"]
+    
+    # 1. Verify account ownership
+    account = db.query(models.BankAccount).filter(
+        models.BankAccount.id == account_id,
+        models.BankAccount.user_id == user_id
+    ).first()
+    
+    if not account:
+        raise HTTPException(status_code=404, detail="Bank account not found or access denied")
+    
+    # 2. Read and parse CSV
+    content = await file.read()
+    try:
+        csv_text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            csv_text = content.decode("latin-1")
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=400, detail="Could not decode CSV file. Please ensure it is UTF-8 or Latin-1 encoded.")
+    
+    import_result = parse_csv(csv_text)
+    
+    if not import_result.preview:
+        detail = "No valid transactions found in CSV."
+        if import_result.errors:
+            detail += f" Errors: {', '.join(import_result.errors[:3])}"
+        raise HTTPException(status_code=400, detail=detail)
+    
+    # 3. Import transactions
+    total_imported = 0
+    total_skipped = 0
+    
+    base_currency = CurrencyService.get_base_currency(db, user_id)
+    account_currency = account.currency or "USD"
+    exchange_rate = CurrencyService.get_exchange_rate(db, user_id, account_currency, base_currency)
+    
+    for row in import_result.preview:
+        # Deduplication: check for same date, amount, and reference/description within this account
+        existing = db.query(models.BankTransaction).filter(
+            models.BankTransaction.bank_account_id == account_id,
+            models.BankTransaction.date == datetime.datetime.strptime(row["date"], "%Y-%m-%d"),
+            models.BankTransaction.amount == row["amount"],
+            models.BankTransaction.merchant_name == row["description"]
+        ).first()
+        
+        if existing:
+            total_skipped += 1
+            continue
+            
+        db_txn = models.BankTransaction(
+            user_id=user_id,
+            bank_account_id=account_id,
+            external_id=f"csv_{uuid.uuid4().hex[:12]}",
+            date=datetime.datetime.strptime(row["date"], "%Y-%m-%d"),
+            amount=row["amount"],
+            amount_base=row["amount"] * exchange_rate,
+            currency=account_currency,
+            exchange_rate=exchange_rate,
+            type="INCOMING" if row["amount"] > 0 else "OUTGOING",
+            reference=row.get("reference"),
+            merchant_name=row["description"],
+            reconciled=False
+        )
+        db.add(db_txn)
+        total_imported += 1
+    
+    db.commit()
+    
+    return {
+        "status": "success",
+        "imported": total_imported,
+        "skipped_duplicates": total_skipped,
+        "errors": import_result.errors[:10]  # Return first 10 errors if any
+    }
