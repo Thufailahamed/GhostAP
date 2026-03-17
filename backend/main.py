@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request as FastApiRequest
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from routers import invoices, webhooks, categories, receivables, funds, analytics, financials, ledger, products, email_intake, recurring, cashflow, subscriptions, reconciliation, bank_sync, budgeting, purchase_orders, inventory, settings
+from routers import invoices, webhooks, categories, receivables, funds, analytics, financials, ledger, products, email_intake, recurring, cashflow, subscriptions, reconciliation, bank_sync, budgeting, purchase_orders, inventory, settings, payroll
 from database import engine
 import models
 import os
@@ -54,6 +54,7 @@ app.include_router(budgeting.router, dependencies=[Depends(get_current_user)])
 app.include_router(purchase_orders.router, dependencies=[Depends(get_current_user)])
 app.include_router(inventory.router, dependencies=[Depends(get_current_user)])
 app.include_router(settings.router, dependencies=[Depends(get_current_user)])
+app.include_router(payroll.router, dependencies=[Depends(get_current_user)])
 
 @app.get("/")
 def read_root():
