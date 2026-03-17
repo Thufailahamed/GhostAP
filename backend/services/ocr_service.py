@@ -12,8 +12,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-# Configure Poppler path for Windows
-POPPLER_PATH = r'C:\Users\user\Downloads\Release-25.12.0-0\poppler-25.12.0\Library\bin'
+# Configure Poppler path for Windows - can be set in .env
+POPPLER_PATH = os.getenv('POPPLER_PATH', r'C:\Users\user\Downloads\Release-25.12.0-0\poppler-25.12.0\Library\bin')
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
